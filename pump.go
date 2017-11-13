@@ -47,7 +47,7 @@ type Statistics struct {
 	OutputCount int64
 }
 
-// Pump represents a message pump, it has a working loop which reads
+// Pump represents a message-pump, it has a working loop which reads
 // and writes messages parallelly and continuously.
 //
 // Pump supports concurrently access.
@@ -58,6 +58,7 @@ type Pump struct {
 
 	rw MessageReadWriter
 	h  Handler
+	sn StopNotifier
 
 	// read
 	rerr error
@@ -71,12 +72,17 @@ type Pump struct {
 }
 
 // NewPump allocates and returns a new Pump.
-func NewPump(rw MessageReadWriter, h Handler, writeQueueSize int) *Pump {
+//
+// If sn is not nil, it will be called when the working loop exiting.
+func NewPump(rw MessageReadWriter, h Handler, writeQueueSize int,
+	sn StopNotifier) *Pump {
+
 	return &Pump{
 		stopD: syncx.NewDoneChan(),
 
 		rw: rw,
 		h:  h,
+		sn: sn,
 
 		rD: syncx.NewDoneChan(),
 		wD: syncx.NewDoneChan(),
@@ -85,10 +91,7 @@ func NewPump(rw MessageReadWriter, h Handler, writeQueueSize int) *Pump {
 }
 
 // Start will start the working loop.
-//
-// parent and sn can be nil. If sn is not nil, it will be called
-// when the working loop exiting.
-func (p *Pump) Start(parent context.Context, sn StopNotifier) {
+func (p *Pump) Start(parent context.Context) {
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -98,11 +101,11 @@ func (p *Pump) Start(parent context.Context, sn StopNotifier) {
 
 	go p.reading(ctx)
 	go p.writing(ctx)
-	go p.monitor(ctx, sn)
+	go p.monitor(ctx)
 }
 
-func (p *Pump) monitor(ctx context.Context, sn StopNotifier) {
-	defer p.ending(sn)
+func (p *Pump) monitor(ctx context.Context) {
+	defer p.ending()
 
 	select {
 	case <-ctx.Done():
@@ -111,7 +114,7 @@ func (p *Pump) monitor(ctx context.Context, sn StopNotifier) {
 	}
 }
 
-func (p *Pump) ending(sn StopNotifier) {
+func (p *Pump) ending() {
 	if e := recover(); e != nil {
 		switch v := e.(type) {
 		case error:
@@ -127,8 +130,8 @@ func (p *Pump) ending(sn StopNotifier) {
 	// if ending from error.
 	p.quitF()
 
-	if sn != nil {
-		sn.OnStop()
+	if p.sn != nil {
+		p.sn.OnStop()
 	}
 
 	<-p.rD
@@ -265,7 +268,7 @@ func (p *Pump) Statistics() Statistics {
 	}
 }
 
-// InnerMRW returns the inner message readwriter.
-func (p *Pump) InnerMRW() MessageReadWriter {
+// UnderlyingMRW returns the internal message readwriter.
+func (p *Pump) UnderlyingMRW() MessageReadWriter {
 	return p.rw
 }

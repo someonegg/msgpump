@@ -15,8 +15,8 @@ func TestPumpRead(test *testing.T) {
 		count++
 	}
 
-	pump := NewPump(rw, HandlerFunc(h), 1)
-	pump.Start(nil, nil)
+	pump := NewPump(rw, HandlerFunc(h), 1, nil)
+	pump.Start(nil)
 
 	select {
 	case <-pump.StopD():
@@ -42,8 +42,8 @@ func TestPumpWrite(test *testing.T) {
 
 	h := func(ctx context.Context, t string, m Message) {}
 
-	pump := NewPump(rw, HandlerFunc(h), 1)
-	pump.Start(nil, StopNotifierFunc(onStop))
+	pump := NewPump(rw, HandlerFunc(h), 1, StopNotifierFunc(onStop))
+	pump.Start(nil)
 
 	pump.Output("t1", []byte("m1"))
 	pump.Output("t2", []byte("m2"))
@@ -78,8 +78,8 @@ func TestPumpTryAndStop(test *testing.T) {
 
 	h := func(ctx context.Context, t string, m Message) {}
 
-	pump := NewPump(rw, HandlerFunc(h), 1)
-	pump.Start(nil, StopNotifierFunc(onStop))
+	pump := NewPump(rw, HandlerFunc(h), 1, StopNotifierFunc(onStop))
+	pump.Start(nil)
 
 	ok := pump.TryOutput("t1", []byte("m1"))
 	if !ok {
