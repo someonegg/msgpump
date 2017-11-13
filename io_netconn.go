@@ -98,7 +98,7 @@ func (rw NetconnMRW) WriteMessage(t string, m Message) error {
 }
 
 // NetconnMessageMaxLength is the maximum message length.
-const NetconnMessageMaxLength = 32 * 1024 * 1024
+var NetconnMessageMaxLength = 32 * 1024 * 1024
 
 // NetconnPump create a pump from a net.Conn.
 func NetconnPump(conn net.Conn, h Handler, writeQueueSize int) *Pump {
