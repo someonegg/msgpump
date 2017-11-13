@@ -45,15 +45,19 @@ const (
 //
 // The websocket message is text message, the format is:
 //   Type=Message
-type WebsocketMRW struct {
+func WebsocketMRW(c WebsocketConn) MessageReadWriter {
+	return websocketMRW{c: c}
+}
+
+type websocketMRW struct {
 	c WebsocketConn
 }
 
-func (rw WebsocketMRW) OnStop() {
+func (rw websocketMRW) OnStop() {
 	rw.c.Close()
 }
 
-func (rw WebsocketMRW) ReadMessage() (t string, m Message, Err error) {
+func (rw websocketMRW) ReadMessage() (t string, m Message, Err error) {
 	wst, wsr, err := rw.c.NextReader()
 	if err != nil {
 		Err = err
@@ -83,7 +87,7 @@ func (rw WebsocketMRW) ReadMessage() (t string, m Message, Err error) {
 	return
 }
 
-func (rw WebsocketMRW) WriteMessage(t string, m Message) error {
+func (rw websocketMRW) WriteMessage(t string, m Message) error {
 	wswc, err := rw.c.NextWriter(TextMessage)
 	if err != nil {
 		return err
@@ -94,10 +98,4 @@ func (rw WebsocketMRW) WriteMessage(t string, m Message) error {
 	wswc.Write(m)
 
 	return wswc.Close()
-}
-
-// WebsocketPump create a pump from a WebsocketConn.
-func WebsocketPump(c WebsocketConn, h Handler, writeQueueSize int) *Pump {
-	rw := WebsocketMRW{c: c}
-	return NewPump(rw, h, writeQueueSize, rw)
 }

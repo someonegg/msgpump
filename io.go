@@ -19,16 +19,6 @@ type MessageReadWriter interface {
 	MessageWriter
 }
 
-type Flusher interface {
-	Flush() error
-}
-
 type StopNotifier interface {
 	OnStop()
-}
-
-type StopNotifierFunc func()
-
-func (f StopNotifierFunc) OnStop() {
-	f()
 }

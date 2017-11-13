@@ -37,7 +37,7 @@ func (c *mockWebsocketConn) Close() error {
 
 func TestWebsocketRead(test *testing.T) {
 	c := &mockWebsocketConn{}
-	rw := WebsocketMRW{c: c}
+	rw := WebsocketMRW(c)
 
 	c.rt = TextMessage
 	c.rb = "t1=m1"
@@ -63,7 +63,7 @@ func TestWebsocketRead(test *testing.T) {
 
 func TestWebsocketWrite(test *testing.T) {
 	c := &mockWebsocketConn{}
-	rw := WebsocketMRW{c: c}
+	rw := WebsocketMRW(c)
 
 	err := rw.WriteMessage("t1", []byte("m1"))
 	if err != nil {

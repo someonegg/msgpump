@@ -39,7 +39,7 @@ func (c *mockNetConn) SetWriteDeadline(t time.Time) error {
 
 func TestNetconnRead(test *testing.T) {
 	c := &mockNetConn{}
-	rw := NetconnMRW{c: newNetbufConn(c)}
+	rw := NetconnMRW(c)
 
 	binary.Write(&c.Buffer, binary.BigEndian, int32(5))
 	c.Buffer.WriteString("t1=m1")
@@ -71,7 +71,7 @@ func TestNetconnRead(test *testing.T) {
 
 func TestNetconnWrite(test *testing.T) {
 	c := &mockNetConn{}
-	rw := NetconnMRW{c: newNetbufConn(c)}
+	rw := NetconnMRW(c)
 
 	err := rw.WriteMessage("t1", []byte("m1"))
 	if err != nil {

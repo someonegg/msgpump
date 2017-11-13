@@ -15,7 +15,7 @@ func TestPumpRead(test *testing.T) {
 		count++
 	}
 
-	pump := NewPump(rw, HandlerFunc(h), 1, nil)
+	pump := NewPump(rw, HandlerFunc(h), 1)
 	pump.Start(nil)
 
 	select {
@@ -36,13 +36,9 @@ func TestPumpRead(test *testing.T) {
 func TestPumpWrite(test *testing.T) {
 	rw := &mockMRW{rsus: make(chan bool), wmax: 2}
 
-	onStop := func() {
-		close(rw.rsus)
-	}
-
 	h := func(ctx context.Context, t string, m Message) {}
 
-	pump := NewPump(rw, HandlerFunc(h), 1, StopNotifierFunc(onStop))
+	pump := NewPump(rw, HandlerFunc(h), 1)
 	pump.Start(nil)
 
 	pump.Output("t1", []byte("m1"))
@@ -71,14 +67,9 @@ func TestPumpWrite(test *testing.T) {
 func TestPumpTryAndStop(test *testing.T) {
 	rw := &mockMRW{rsus: make(chan bool), wsus: make(chan bool)}
 
-	onStop := func() {
-		close(rw.rsus)
-		close(rw.wsus)
-	}
-
 	h := func(ctx context.Context, t string, m Message) {}
 
-	pump := NewPump(rw, HandlerFunc(h), 1, StopNotifierFunc(onStop))
+	pump := NewPump(rw, HandlerFunc(h), 1)
 	pump.Start(nil)
 
 	ok := pump.TryOutput("t1", []byte("m1"))

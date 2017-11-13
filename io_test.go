@@ -19,6 +19,15 @@ type mockMRW struct {
 	b bytes.Buffer
 }
 
+func (rw *mockMRW) OnStop() {
+	if rw.rsus != nil {
+		close(rw.rsus)
+	}
+	if rw.wsus != nil {
+		close(rw.wsus)
+	}
+}
+
 func (rw *mockMRW) ReadMessage() (t string, m Message, err error) {
 	if rw.rsus != nil {
 		select {

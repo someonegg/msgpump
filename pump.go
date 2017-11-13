@@ -73,10 +73,10 @@ type Pump struct {
 
 // NewPump allocates and returns a new Pump.
 //
-// If sn is not nil, it will be called when the working loop exiting.
-func NewPump(rw MessageReadWriter, h Handler, writeQueueSize int,
-	sn StopNotifier) *Pump {
-
+// If rw implementes the StopNotifier interface, it will be called when
+// the working loop exiting.
+func NewPump(rw MessageReadWriter, h Handler, writeQueueSize int) *Pump {
+	sn, _ := rw.(StopNotifier)
 	return &Pump{
 		stopD: syncx.NewDoneChan(),
 
