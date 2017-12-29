@@ -2,9 +2,13 @@ msgpump
 ======
 
 msgpump provides a message-pump facility with golang.
-Message is defined as variable-length byte array, they are
-distinguished by message-type, they can be read and write by
-message-pump parallelly and continuously.
+
+The message-pump is a facility which will receive and dispatch messages
+continuously after startup. It will also send messages continuously and
+asynchronously after startup.
+
+The message is defined as variable-length byte array, they are distinguished
+by the message-type (a string).
 
 Documentation
 -------------
