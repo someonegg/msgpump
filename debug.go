@@ -9,7 +9,8 @@ import (
 	"io"
 )
 
-// MessageDump is a debugging helper, it can provide message dump function.
+// MessageDump is a debugging helper, it implements the MessageReadWriter
+// interface and provides message dump function.
 //
 // The dump format is:
 //	 R|W:Type:MessageSize\nMessage\n\n
