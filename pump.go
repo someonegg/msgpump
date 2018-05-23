@@ -7,13 +7,21 @@ package msgpump
 import (
 	"context"
 	"errors"
-	"github.com/someonegg/gox/syncx"
+	"fmt"
+	"log"
+	"runtime"
 	"sync/atomic"
+
+	"github.com/someonegg/gox/syncx"
 )
 
 var (
 	errUnknownPanic = errors.New("unknown panic")
 )
+
+type legalPanic struct {
+	err error
+}
 
 // Handler is the message processor.
 //
@@ -69,6 +77,8 @@ type Pump struct {
 	wQ   chan msgEntry
 
 	stat Statistics
+
+	panicLogF func(interface{})
 }
 
 // NewPump allocates and returns a new Pump.
@@ -87,7 +97,22 @@ func NewPump(rw MessageReadWriter, h Handler, writeQueueSize int) *Pump {
 		rD: syncx.NewDoneChan(),
 		wD: syncx.NewDoneChan(),
 		wQ: make(chan msgEntry, writeQueueSize),
+
+		panicLogF: thePanicLogFunc,
 	}
+}
+
+// The default panic log function.
+func thePanicLogFunc(v interface{}) {
+	const size = 16 << 10
+	buf := make([]byte, size)
+	buf = buf[:runtime.Stack(buf, false)]
+	log.Print("pump panic: ", v, fmt.Sprintf("\n%s", buf))
+}
+
+// SetPanicLogFunc is optional.
+func (p *Pump) SetPanicLogFunc(f func(panicV interface{})) {
+	p.panicLogF = f
 }
 
 // Start will start the working loop.
@@ -116,11 +141,18 @@ func (p *Pump) monitor(ctx context.Context) {
 
 func (p *Pump) ending() {
 	if e := recover(); e != nil {
+		legal := false
 		switch v := e.(type) {
+		case legalPanic:
+			legal = true
+			p.err = v.err
 		case error:
 			p.err = v
 		default:
 			p.err = errUnknownPanic
+		}
+		if !legal && p.panicLogF != nil {
+			p.panicLogF(e)
 		}
 	}
 
@@ -141,11 +173,18 @@ func (p *Pump) ending() {
 func (p *Pump) reading(ctx context.Context) {
 	defer func() {
 		if e := recover(); e != nil {
+			legal := false
 			switch v := e.(type) {
+			case legalPanic:
+				legal = true
+				p.err = v.err
 			case error:
 				p.rerr = v
 			default:
 				p.rerr = errUnknownPanic
+			}
+			if !legal && p.panicLogF != nil {
+				p.panicLogF(e)
 			}
 		}
 
@@ -168,7 +207,7 @@ func (p *Pump) reading(ctx context.Context) {
 func (p *Pump) readMessage() (string, Message) {
 	t, m, err := p.rw.ReadMessage()
 	if err != nil {
-		panic(err)
+		panic(legalPanic{err})
 	}
 	atomic.AddInt64(&p.stat.ReadedCount, 1)
 	atomic.AddInt64(&p.stat.ReadedBytes, int64(len(m)))
@@ -183,11 +222,18 @@ type msgEntry struct {
 func (p *Pump) writing(ctx context.Context) {
 	defer func() {
 		if e := recover(); e != nil {
+			legal := false
 			switch v := e.(type) {
+			case legalPanic:
+				legal = true
+				p.err = v.err
 			case error:
 				p.werr = v
 			default:
 				p.werr = errUnknownPanic
+			}
+			if !legal && p.panicLogF != nil {
+				p.panicLogF(e)
 			}
 		}
 
@@ -207,7 +253,7 @@ func (p *Pump) writing(ctx context.Context) {
 func (p *Pump) writeMessage(t string, m Message) {
 	err := p.rw.WriteMessage(t, m)
 	if err != nil {
-		panic(err)
+		panic(legalPanic{err})
 	}
 	atomic.AddInt64(&p.stat.WrittenCount, 1)
 	atomic.AddInt64(&p.stat.WrittenBytes, int64(len(m)))
