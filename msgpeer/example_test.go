@@ -94,7 +94,9 @@ type ServerPeer struct {
 func (p *ServerPeer) Start(conn net.Conn) {
 	mrw := msgpump.NetconnMRW(conn)
 
-	h := msgpeer.AsyncHandler(p, 5*time.Second)
+	h := msgpeer.AsyncHandler(p, 5*time.Second, func(v interface{}) {
+		log.Println(v)
+	})
 	p.peer = msgpeer.NewPeer(mrw, h, WriteQueueSize)
 	p.peer.Start(nil)
 }
@@ -109,6 +111,7 @@ func (p *ServerPeer) Answer(ctx context.Context, r msgpeer.Request, w msgpeer.Re
 
 func (p *ServerPeer) Bye(ctx context.Context, r msgpeer.Request, w msgpeer.ResponseWriter) {
 	w(ctx, r)
+	panic("test plog")
 }
 
 func (p *ServerPeer) Process(ctx context.Context, t string, r msgpeer.Request, w msgpeer.ResponseWriter) {

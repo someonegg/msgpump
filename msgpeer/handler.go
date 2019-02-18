@@ -6,6 +6,9 @@ package msgpeer
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"runtime"
 	"time"
 
 	"github.com/someonegg/msgpump"
@@ -19,18 +22,26 @@ type entry struct {
 }
 
 type asyncHandler struct {
-	h      Handler
-	idle   time.Duration
-	entryC chan entry
+	h        Handler
+	idle     time.Duration
+	panicLog func(interface{})
+	entryC   chan entry
 }
 
-// AsyncHandler convert a handler to asynchronous mode, then each call is initiated
+// AsyncHandler convert a handler to asynchronous mode, each call is initiated
 // from a separate worker goroutine.
-func AsyncHandler(h Handler, workerIdleTimeout time.Duration) Handler {
+func AsyncHandler(h Handler, workerIdleTimeout time.Duration,
+	workerPanicLog func(panicV interface{})) Handler {
+
+	if workerPanicLog == nil {
+		workerPanicLog = theWorkerPanicLogFunc
+	}
+
 	return &asyncHandler{
-		h:      h,
-		idle:   workerIdleTimeout,
-		entryC: make(chan entry),
+		h:        h,
+		idle:     workerIdleTimeout,
+		panicLog: workerPanicLog,
+		entryC:   make(chan entry),
 	}
 }
 
@@ -51,7 +62,21 @@ func (h *asyncHandler) async(e entry) {
 	}
 }
 
+// The default worker panic log function.
+func theWorkerPanicLogFunc(v interface{}) {
+	const size = 16 << 10
+	buf := make([]byte, size)
+	buf = buf[:runtime.Stack(buf, false)]
+	log.Print("worker panic: ", v, fmt.Sprintf("\n%s", buf))
+}
+
 func (h *asyncHandler) work(e entry) {
+	defer func() {
+		if e := recover(); e != nil {
+			h.panicLog(e)
+		}
+	}()
+
 	h.handle(e)
 
 	t := time.NewTimer(h.idle)
