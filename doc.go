@@ -4,6 +4,8 @@
 
 // Package msgpump provides a message-pump facility.
 //
+//   Most code should use the inside package msgpeer.
+//
 // The message-pump will continuously receive, process and send messages after startup.
 //
 // The message is defined as variable-length byte array, they are distinguished
