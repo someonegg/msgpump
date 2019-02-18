@@ -17,6 +17,7 @@ import (
 
 var (
 	errUnknownPanic = errors.New("unknown panic")
+	ErrPumpStopped  = errors.New("pump stopped")
 )
 
 type legalPanic struct {
@@ -81,7 +82,7 @@ type Pump struct {
 	panicLogF func(interface{})
 }
 
-// NewPump allocates and returns a new Pump.
+// NewPump allocates and returns a new pump.
 //
 // If rw implementes the StopNotifier interface, it will be called when
 // the working loop exiting.
@@ -286,11 +287,7 @@ func (p *Pump) Error() error {
 
 // Output puts the message to the write queue.
 func (p *Pump) Output(t string, m Message) {
-	select {
-	case p.wQ <- msgEntry{t, m}:
-		atomic.AddInt64(&p.stat.OutputCount, 1)
-	case <-p.stopD:
-	}
+	p.Post(context.Background(), t, m)
 }
 
 // TryOutput tries to put the message to the write queue.
@@ -302,6 +299,19 @@ func (p *Pump) TryOutput(t string, m Message) bool {
 	default:
 		return false
 	}
+}
+
+// Post puts the message to the write queue.
+func (p *Pump) Post(ctx context.Context, t string, m Message) (err error) {
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+	case <-p.stopD:
+		err = ErrPumpStopped
+	case p.wQ <- msgEntry{t, m}:
+		atomic.AddInt64(&p.stat.OutputCount, 1)
+	}
+	return
 }
 
 func (p *Pump) Statistics() Statistics {
