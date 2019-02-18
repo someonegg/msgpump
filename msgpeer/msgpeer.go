@@ -29,8 +29,6 @@ type Handler interface {
 	Process(ctx context.Context, t string, r Request, w ResponseWriter)
 	// notify message
 	OnNotify(ctx context.Context, t string, n Notify)
-	// unknown message
-	OnUnknown(ctx context.Context, t string, m msgpump.Message)
 }
 
 type Peer struct {
@@ -127,7 +125,5 @@ func (p *Peer) Process(ctx context.Context, mt string, msg msgpump.Message) {
 	case "N":
 		t := ss[1]
 		p.h.OnNotify(ctx, t, msg)
-	default:
-		p.h.OnUnknown(ctx, mt, msg)
 	}
 }

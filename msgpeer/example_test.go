@@ -60,10 +60,6 @@ func (p *ClientPeer) OnNotify(ctx context.Context, t string, n msgpeer.Notify) {
 	log.Printf("client receive notify: %v, %s", t, n)
 }
 
-func (p *ClientPeer) OnUnknown(ctx context.Context, t string, m msgpump.Message) {
-	log.Printf("client receive unknown: %v, %s", t, m)
-}
-
 func (p *ClientPeer) WaitStop() {
 	select {
 	case <-p.peer.StopD():
@@ -131,10 +127,6 @@ func (p *ServerPeer) Process(ctx context.Context, t string, r msgpeer.Request, w
 
 func (p *ServerPeer) OnNotify(ctx context.Context, t string, n msgpeer.Notify) {
 	log.Printf("server receive notify: %v, %s", t, n)
-}
-
-func (p *ServerPeer) OnUnknown(ctx context.Context, t string, m msgpump.Message) {
-	log.Printf("server receive unknown: %v, %s", t, m)
 }
 
 func (p *ServerPeer) WaitStop() {
