@@ -23,8 +23,8 @@ type ResponseWriter func(ctx context.Context, resp Response) error
 
 // Handler is the request processor.
 //
-// Process should complete the request processing as soon as possible, and
-// write a response through the ResponseWriter.
+// Handler should return as soon as possible, it is valid to read the
+// message or use the ResponseWriter after returning.
 type Handler interface {
 	Process(ctx context.Context, t string, r Request, w ResponseWriter)
 	// notify message
