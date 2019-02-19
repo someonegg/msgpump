@@ -5,8 +5,8 @@ msgpump provides a message-pump facility with golang.
 
 The message-pump will continuously receive, process and send messages after startup.
 
-The message is defined as variable-length byte array, they are distinguished
-by the message-type (a string).
+The message-peer implements a synchronous request response model over message-pump, it
+considers the client and server peers, allowing each to send requests to the other concurrently.
 
 The transport layer is customizable, there are already implementations over net.Conn
 and websocket.Conn.
@@ -14,7 +14,7 @@ and websocket.Conn.
 Documentation
 -------------
 
-- [API Reference](http://godoc.org/github.com/someonegg/msgpump)
+- [API Reference](http://godoc.org/github.com/someonegg/msgpump/msgpeer)
 
 Installation
 ------------

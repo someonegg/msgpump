@@ -23,29 +23,24 @@ type ClientPeer struct {
 	peer *msgpeer.Peer
 }
 
-func (p *ClientPeer) Start() {
-	conn, err := net.Dial("tcp", TheAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
+func (p *ClientPeer) Start(conn net.Conn) {
 	mrw := msgpump.NetconnMRW(conn)
 
 	p.peer = msgpeer.NewPeer(mrw, p, WriteQueueSize)
 	p.peer.Start(nil)
 }
 
-func (p *ClientPeer) Hello(r msgpeer.Request) {
+func (p *ClientPeer) Hello(r []byte) {
 	resp, err := p.peer.Do(context.Background(), "client-hello", r)
 	log.Printf("client-hello response: %s, %v", resp, err)
 }
 
-func (p *ClientPeer) Ask(r msgpeer.Request) {
+func (p *ClientPeer) Ask(r []byte) {
 	resp, err := p.peer.Do(context.Background(), "client-ask", r)
 	log.Printf("client-ask response: %s, %v", resp, err)
 }
 
-func (p *ClientPeer) Bye(r msgpeer.Request) {
+func (p *ClientPeer) Bye(r []byte) {
 	resp, err := p.peer.Do(context.Background(), "client-bye", r)
 	log.Printf("client-bye response: %s, %v", resp, err)
 	p.peer.Stop()
@@ -53,6 +48,16 @@ func (p *ClientPeer) Bye(r msgpeer.Request) {
 
 func (p *ClientPeer) Process(ctx context.Context, t string, r msgpeer.Request, w msgpeer.ResponseWriter) {
 	log.Printf("client process request: %v, %s", t, r)
+
+	switch t {
+	case "server-ask":
+		p.OnAsk(ctx, r, w)
+	default:
+		log.Print("unknown server request")
+	}
+}
+
+func (p *ClientPeer) OnAsk(ctx context.Context, r []byte, w msgpeer.ResponseWriter) {
 	w(ctx, r)
 }
 
@@ -67,9 +72,13 @@ func (p *ClientPeer) WaitStop() {
 }
 
 func client() {
-	p := &ClientPeer{}
+	conn, err := net.Dial("tcp", TheAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	p.Start()
+	p := &ClientPeer{}
+	p.Start(conn)
 
 	p.Hello([]byte("aaa"))
 
@@ -84,7 +93,7 @@ func client() {
 
 	p.WaitStop()
 
-	log.Printf("client stop, error: %v", p.peer.Error())
+	log.Printf("client peer stop, error: %v", p.peer.Error())
 }
 
 type ServerPeer struct {
@@ -95,23 +104,15 @@ func (p *ServerPeer) Start(conn net.Conn) {
 	mrw := msgpump.NetconnMRW(conn)
 
 	h := msgpeer.ParallelHandler(p, 5*time.Second, func(v interface{}) {
-		log.Println(v)
+		log.Println("catch panic:", v)
 	})
 	p.peer = msgpeer.NewPeer(mrw, h, WriteQueueSize)
 	p.peer.Start(nil)
 }
 
-func (p *ServerPeer) Hello(ctx context.Context, r msgpeer.Request, w msgpeer.ResponseWriter) {
-	w(ctx, r)
-}
-
-func (p *ServerPeer) Answer(ctx context.Context, r msgpeer.Request, w msgpeer.ResponseWriter) {
-	w(ctx, r)
-}
-
-func (p *ServerPeer) Bye(ctx context.Context, r msgpeer.Request, w msgpeer.ResponseWriter) {
-	w(ctx, r)
-	panic("test plog")
+func (p *ServerPeer) Ask(r []byte) {
+	resp, err := p.peer.Do(context.Background(), "server-ask", r)
+	log.Printf("server-ask response: %s, %v", resp, err)
 }
 
 func (p *ServerPeer) Process(ctx context.Context, t string, r msgpeer.Request, w msgpeer.ResponseWriter) {
@@ -119,14 +120,30 @@ func (p *ServerPeer) Process(ctx context.Context, t string, r msgpeer.Request, w
 
 	switch t {
 	case "client-hello":
-		p.Hello(ctx, r, w)
+		p.OnHello(ctx, r, w)
 	case "client-ask":
-		p.Answer(ctx, r, w)
+		p.OnAsk(ctx, r, w)
 	case "client-bye":
-		p.Bye(ctx, r, w)
+		p.OnBye(ctx, r, w)
 	default:
 		log.Print("unknown client request")
 	}
+}
+
+func (p *ServerPeer) OnHello(ctx context.Context, r []byte, w msgpeer.ResponseWriter) {
+	w(ctx, []byte("AAA"))
+}
+
+func (p *ServerPeer) OnAsk(ctx context.Context, r []byte, w msgpeer.ResponseWriter) {
+	w(ctx, r)
+
+	// must use ParallelHandler
+	p.Ask([]byte("BBB0"))
+}
+
+func (p *ServerPeer) OnBye(ctx context.Context, r []byte, w msgpeer.ResponseWriter) {
+	w(ctx, []byte("CCC"))
+	panic("bye")
 }
 
 func (p *ServerPeer) OnNotify(ctx context.Context, t string, n msgpeer.Notify) {
@@ -154,14 +171,18 @@ func server(listenD syncx.DoneChan) {
 			log.Fatal(err)
 		}
 
-		p := &ServerPeer{}
-		p.Start(conn)
 		go func() {
-			resp, err := p.peer.Do(context.Background(), "server-hello", []byte("AAA"))
-			log.Printf("server-hello response: %s, %v", resp, err)
+			p := &ServerPeer{}
+			p.Start(conn)
+
 			p.peer.Notify(context.Background(), "server-notify", []byte("NNN"))
+			time.Sleep(time.Millisecond)
+
+			p.Ask([]byte("BBB1"))
+
 			p.WaitStop()
-			log.Printf("sclient stop, error: %v", p.peer.Error())
+
+			log.Printf("server peer stop, error: %v", p.peer.Error())
 		}()
 	}
 }

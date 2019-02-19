@@ -24,12 +24,7 @@ type ClientPeer struct {
 	helloD syncx.DoneChan
 }
 
-func (p *ClientPeer) Start() {
-	conn, err := net.Dial("tcp", TheAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
+func (p *ClientPeer) Start(conn net.Conn) {
 	mrw := msgpump.NetconnMRW(conn)
 
 	p.pump = msgpump.NewPump(mrw, p, WriteQueueSize)
@@ -81,9 +76,13 @@ func (p *ClientPeer) WaitStop() {
 }
 
 func client() {
-	p := &ClientPeer{helloD: syncx.NewDoneChan()}
+	conn, err := net.Dial("tcp", TheAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	p.Start()
+	p := &ClientPeer{helloD: syncx.NewDoneChan()}
+	p.Start(conn)
 
 	p.Hello([]byte("aaa"))
 
