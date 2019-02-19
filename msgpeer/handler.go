@@ -21,23 +21,23 @@ type entry struct {
 	w   ResponseWriter // not nil if request
 }
 
-type asyncHandler struct {
+type parallHandler struct {
 	h        Handler
 	idle     time.Duration
 	panicLog func(interface{})
 	entryC   chan entry
 }
 
-// AsyncHandler convert a handler to asynchronous mode, each call is initiated
-// from a separate worker goroutine.
-func AsyncHandler(h Handler, workerIdleTimeout time.Duration,
+// ParallelHandler convert a handler to parallel mode, in which each call
+// will be initiated from a different worker goroutine.
+func ParallelHandler(h Handler, workerIdleTimeout time.Duration,
 	workerPanicLog func(panicV interface{})) Handler {
 
 	if workerPanicLog == nil {
 		workerPanicLog = theWorkerPanicLogFunc
 	}
 
-	return &asyncHandler{
+	return &parallHandler{
 		h:        h,
 		idle:     workerIdleTimeout,
 		panicLog: workerPanicLog,
@@ -45,15 +45,15 @@ func AsyncHandler(h Handler, workerIdleTimeout time.Duration,
 	}
 }
 
-func (h *asyncHandler) Process(ctx context.Context, t string, r Request, w ResponseWriter) {
-	h.async(entry{ctx, t, r, w})
+func (h *parallHandler) Process(ctx context.Context, t string, r Request, w ResponseWriter) {
+	h.parall(entry{ctx, t, r, w})
 }
 
-func (h *asyncHandler) OnNotify(ctx context.Context, t string, n Notify) {
-	h.async(entry{ctx, t, n, nil})
+func (h *parallHandler) OnNotify(ctx context.Context, t string, n Notify) {
+	h.parall(entry{ctx, t, n, nil})
 }
 
-func (h *asyncHandler) async(e entry) {
+func (h *parallHandler) parall(e entry) {
 	select {
 	case <-e.ctx.Done():
 	case h.entryC <- e:
@@ -70,7 +70,7 @@ func theWorkerPanicLogFunc(v interface{}) {
 	log.Print("worker panic: ", v, fmt.Sprintf("\n%s", buf))
 }
 
-func (h *asyncHandler) work(e entry) {
+func (h *parallHandler) work(e entry) {
 	defer func() {
 		if e := recover(); e != nil {
 			h.panicLog(e)
@@ -96,7 +96,7 @@ func (h *asyncHandler) work(e entry) {
 	}
 }
 
-func (h *asyncHandler) handle(e entry) {
+func (h *parallHandler) handle(e entry) {
 	if e.w != nil {
 		h.h.Process(e.ctx, e.t, e.m, e.w)
 	} else {

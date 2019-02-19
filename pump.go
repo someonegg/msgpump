@@ -26,8 +26,9 @@ type legalPanic struct {
 
 // Handler is the message processor.
 //
-// Handler should return as soon as possible, it is valid to read the
-// message after returning.
+// Processor is called serially, so it should return as soon as possible.
+// You can process messages asynchronously if necessary, it is safe to read
+// them after returning.
 type Handler interface {
 	Process(ctx context.Context, t string, m Message)
 }

@@ -23,8 +23,11 @@ type ResponseWriter func(ctx context.Context, resp Response) error
 
 // Handler is the request processor.
 //
-// Handler should return as soon as possible, it is valid to read the
-// message or use the ResponseWriter after returning.
+// Processor is called serially, so it should return as soon as possible.
+// You can process requests asynchronously if necessary, it is safe to read
+// them after returning.
+//
+// See ParallelHandler too.
 type Handler interface {
 	Process(ctx context.Context, t string, r Request, w ResponseWriter)
 	// notify message
