@@ -108,11 +108,12 @@ func TestPumpPostAndStop(test *testing.T) {
 		test.Fatal("post")
 	}
 	pump.Output("t2", []byte("m2"))
-	ctx, _ := context.WithTimeout(context.Background(), 0)
+	ctx, qf := context.WithTimeout(context.Background(), 0)
 	err = pump.Post(ctx, "t3", []byte("m3"))
 	if err == nil {
 		test.Fatal("try write")
 	}
+	qf()
 
 	pump.Stop()
 
