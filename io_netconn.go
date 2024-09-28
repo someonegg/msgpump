@@ -39,7 +39,8 @@ var NetconnMessageMaxLength = 32 * 1024 * 1024
 // NetconnMRW converts a net.Conn to a MessageReadWriter.
 //
 // In the transport layer, message's layout is:
-//   Length(4-bytes int, big-endian)Type=Message
+//
+//	Length(4-bytes int, big-endian)Type=Message
 func NetconnMRW(c net.Conn) MessageReadWriter {
 	return netconnMRW{c: getNetbufConn(c)}
 }

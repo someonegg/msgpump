@@ -13,7 +13,8 @@ import (
 // interface and provides message dump function.
 //
 // The dump format is:
-//	 R|W:Type:MessageSize\nMessage\n\n
+//
+//	R|W:Type:MessageSize\nMessage\n\n
 type MessageDump struct {
 	RW   MessageReadWriter
 	Dump io.Writer

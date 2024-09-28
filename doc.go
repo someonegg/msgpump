@@ -4,7 +4,7 @@
 
 // Package msgpump provides a message-pump facility.
 //
-//   Most code should use the inside package msgpeer.
+//	Most code should use the inside package msgpeer.
 //
 // The message-pump will continuously receive, process and send messages after startup.
 //
@@ -13,6 +13,7 @@
 //
 // The transport layer is defined by the MessageReadWriter interface, there are
 // two default implementations:
-//   NetconnMRW over net.Conn
-//   WebsocketMRW over websocket.Conn
+//
+//	NetconnMRW over net.Conn
+//	WebsocketMRW over websocket.Conn
 package msgpump

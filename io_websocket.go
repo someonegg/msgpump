@@ -44,7 +44,8 @@ const (
 // WebsocketMRW converts a WebsocketConn to a MessageReadWriter.
 //
 // The websocket message is text message, the format is:
-//   Type=Message
+//
+//	Type=Message
 func WebsocketMRW(c WebsocketConn) MessageReadWriter {
 	return websocketMRW{c: c}
 }
