@@ -98,9 +98,10 @@ func (p *Peer) Notify(ctx context.Context, t string, n Notify) error {
 // Process implements the msgpump.Handler interface.
 //
 // The format of the message-type string t is:
-//   R,request-type,request-id  for request
-//   P,request-type,request-id  for response
-//   N,notify-type              for notify
+//
+//	R,request-type,request-id  for request
+//	P,request-type,request-id  for response
+//	N,notify-type              for notify
 func (p *Peer) Process(ctx context.Context, mt string, msg msgpump.Message) {
 	ss := strings.SplitN(mt, ",", 4)
 	switch ss[0] {
