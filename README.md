@@ -22,5 +22,3 @@ Installation
 Install msgpump using the "go get" command:
 
     go get github.com/someonegg/msgpump
-
-The Go distribution is msgpump's only dependency.
