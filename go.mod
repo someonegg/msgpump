@@ -1,4 +1,4 @@
-module github.com/someonegg/msgpump
+module github.com/someonegg/msgpump/v2
 
 go 1.20
 

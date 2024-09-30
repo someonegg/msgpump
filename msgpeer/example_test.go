@@ -1,4 +1,4 @@
-// Copyright 2019 someonegg. All rights reserved.
+// Copyright 2024 someonegg. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,10 +6,9 @@ package msgpeer_test
 
 import (
 	"context"
-	"fmt"
 	"github.com/someonegg/gox/syncx"
-	"github.com/someonegg/msgpump"
-	"github.com/someonegg/msgpump/msgpeer"
+	"github.com/someonegg/msgpump/v2"
+	"github.com/someonegg/msgpump/v2/msgpeer"
 	"log"
 	"net"
 	"testing"
@@ -30,39 +29,18 @@ func (p *ClientPeer) Start(conn net.Conn) {
 	p.peer.Start(nil)
 }
 
-func (p *ClientPeer) Hello(r []byte) {
-	resp, err := p.peer.Do(context.Background(), "client-hello", r)
-	log.Printf("client-hello response: %s, %v", resp, err)
+func (p *ClientPeer) Process(ctx context.Context, r msgpeer.Request, w msgpeer.ResponseWriter) {
+	log.Printf("client receive request: %s", r)
+	w(ctx, []byte("client processed"))
 }
 
-func (p *ClientPeer) Ask(r []byte) {
-	resp, err := p.peer.Do(context.Background(), "client-ask", r)
+func (p *ClientPeer) OnNotify(ctx context.Context, n msgpeer.Notify) {
+	log.Printf("client receive notify: %s", n)
+}
+
+func (p *ClientPeer) Ask() {
+	resp, err := p.peer.Do(context.Background(), []byte("client-ask"))
 	log.Printf("client-ask response: %s, %v", resp, err)
-}
-
-func (p *ClientPeer) Bye(r []byte) {
-	resp, err := p.peer.Do(context.Background(), "client-bye", r)
-	log.Printf("client-bye response: %s, %v", resp, err)
-	p.peer.Stop()
-}
-
-func (p *ClientPeer) Process(ctx context.Context, t string, r msgpeer.Request, w msgpeer.ResponseWriter) {
-	log.Printf("client process request: %v, %s", t, r)
-
-	switch t {
-	case "server-ask":
-		p.OnAsk(ctx, r, w)
-	default:
-		log.Print("unknown server request")
-	}
-}
-
-func (p *ClientPeer) OnAsk(ctx context.Context, r []byte, w msgpeer.ResponseWriter) {
-	w(ctx, r)
-}
-
-func (p *ClientPeer) OnNotify(ctx context.Context, t string, n msgpeer.Notify) {
-	log.Printf("client receive notify: %v, %s", t, n)
 }
 
 func (p *ClientPeer) WaitStop() {
@@ -80,20 +58,20 @@ func client() {
 	p := &ClientPeer{}
 	p.Start(conn)
 
-	p.Hello([]byte("aaa"))
+	p.peer.Notify(context.Background(), []byte("client started"))
+	time.Sleep(time.Millisecond)
 
-	p.peer.Notify(context.Background(), "client-notify", []byte("nnn"))
+	p.Ask()
+	time.Sleep(time.Millisecond)
 
-	for i := 0; i < 3; i++ {
-		p.Ask([]byte(fmt.Sprint("bbb", i)))
-		time.Sleep(time.Millisecond)
-	}
-
-	p.Bye([]byte("ccc"))
+	time.Sleep(10 * time.Millisecond)
+	p.peer.Stop()
 
 	p.WaitStop()
 
-	log.Printf("client peer stop, error: %v", p.peer.Error())
+	p.Ask()
+
+	log.Printf("client peer stopped, error: %v", p.peer.Error())
 }
 
 type ServerPeer struct {
@@ -110,44 +88,18 @@ func (p *ServerPeer) Start(conn net.Conn) {
 	p.peer.Start(nil)
 }
 
-func (p *ServerPeer) Ask(r []byte) {
-	resp, err := p.peer.Do(context.Background(), "server-ask", r)
+func (p *ServerPeer) Process(ctx context.Context, r msgpeer.Request, w msgpeer.ResponseWriter) {
+	log.Printf("server receive request: %s", r)
+	w(ctx, []byte("server processed"))
+}
+
+func (p *ServerPeer) OnNotify(ctx context.Context, n msgpeer.Notify) {
+	log.Printf("server receive notify: %s", n)
+}
+
+func (p *ServerPeer) Ask() {
+	resp, err := p.peer.Do(context.Background(), []byte("server-ask"))
 	log.Printf("server-ask response: %s, %v", resp, err)
-}
-
-func (p *ServerPeer) Process(ctx context.Context, t string, r msgpeer.Request, w msgpeer.ResponseWriter) {
-	log.Printf("server process request: %v, %s", t, r)
-
-	switch t {
-	case "client-hello":
-		p.OnHello(ctx, r, w)
-	case "client-ask":
-		p.OnAsk(ctx, r, w)
-	case "client-bye":
-		p.OnBye(ctx, r, w)
-	default:
-		log.Print("unknown client request")
-	}
-}
-
-func (p *ServerPeer) OnHello(ctx context.Context, r []byte, w msgpeer.ResponseWriter) {
-	w(ctx, []byte("AAA"))
-}
-
-func (p *ServerPeer) OnAsk(ctx context.Context, r []byte, w msgpeer.ResponseWriter) {
-	w(ctx, r)
-
-	// must use ParallelHandler
-	p.Ask([]byte("BBB0"))
-}
-
-func (p *ServerPeer) OnBye(ctx context.Context, r []byte, w msgpeer.ResponseWriter) {
-	w(ctx, []byte("CCC"))
-	panic("bye")
-}
-
-func (p *ServerPeer) OnNotify(ctx context.Context, t string, n msgpeer.Notify) {
-	log.Printf("server receive notify: %v, %s", t, n)
 }
 
 func (p *ServerPeer) WaitStop() {
@@ -175,14 +127,17 @@ func server(listenD syncx.DoneChan) {
 			p := &ServerPeer{}
 			p.Start(conn)
 
-			p.peer.Notify(context.Background(), "server-notify", []byte("NNN"))
+			p.peer.Notify(context.Background(), []byte("server started"))
 			time.Sleep(time.Millisecond)
 
-			p.Ask([]byte("BBB1"))
+			p.Ask()
+			time.Sleep(time.Millisecond)
 
 			p.WaitStop()
 
-			log.Printf("server peer stop, error: %v", p.peer.Error())
+			p.Ask()
+
+			log.Printf("server peer stopped, error: %v", p.peer.Error())
 		}()
 	}
 }

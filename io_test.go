@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 )
 
 type mockMRW struct {
@@ -15,7 +16,7 @@ type mockMRW struct {
 	wcnt int
 	wmax int
 
-	// length:Type:Message
+	// length:Message
 	b bytes.Buffer
 }
 
@@ -28,7 +29,7 @@ func (rw *mockMRW) OnStop() {
 	}
 }
 
-func (rw *mockMRW) ReadMessage() (t string, m Message, err error) {
+func (rw *mockMRW) ReadMessage() (m Message, err error) {
 	if rw.rsus != nil {
 		select {
 		case <-rw.rsus:
@@ -41,10 +42,10 @@ func (rw *mockMRW) ReadMessage() (t string, m Message, err error) {
 	}
 
 	rw.rcnt++
-	return fmt.Sprint("t", rw.rcnt), []byte(fmt.Sprint("m", rw.rcnt)), nil
+	return []byte(fmt.Sprint("m", rw.rcnt)), nil
 }
 
-func (rw *mockMRW) WriteMessage(t string, m Message) error {
+func (rw *mockMRW) WriteMessage(m Message) error {
 	if rw.wsus != nil {
 		select {
 		case <-rw.wsus:
@@ -56,11 +57,29 @@ func (rw *mockMRW) WriteMessage(t string, m Message) error {
 	}
 
 	rw.wcnt++
-	l := len(t) + 1 + len(m)
+	l := m.Size()
 	rw.b.WriteString(fmt.Sprint(l))
 	rw.b.WriteString(":")
-	rw.b.WriteString(t)
-	rw.b.WriteString(":")
 	rw.b.Write(m)
+	return nil
+}
+
+func (rw *mockMRW) WriteMessageMP(m MPMessage) error {
+	if rw.wsus != nil {
+		select {
+		case <-rw.wsus:
+		}
+	}
+
+	if rw.wmax > 0 && rw.wcnt >= rw.wmax {
+		return io.ErrClosedPipe
+	}
+
+	rw.wcnt++
+	l := m.Size()
+	rw.b.WriteString(fmt.Sprint(l))
+	rw.b.WriteString(":")
+	bufs := net.Buffers(m)
+	bufs.WriteTo(&rw.b)
 	return nil
 }

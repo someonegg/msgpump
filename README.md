@@ -1,20 +1,22 @@
 msgpump
 ======
 
-msgpump provides a message-pump facility with golang.
+msgpump provides a binary message-pump facility with golang.
 
 The message-pump will continuously receive, process and send messages after startup.
 
-The message-peer implements a synchronous request response model over message-pump, it
-considers the client and server peers, allowing each to send requests to the other concurrently.
+The transport layer is customizable, there is an implementation over net.Conn.
 
-The transport layer is customizable, there are already implementations over net.Conn
-and websocket.Conn.
+msgpeer
+-------------
+
+The message-peer implements a synchronous request response model over message-pump, it considers the client and server peers, allowing each to send requests to the other concurrently.
 
 Documentation
 -------------
 
-- [API Reference](http://godoc.org/github.com/someonegg/msgpump/msgpeer)
+- [msgpump/msgpeer](https://godoc.org/github.com/someonegg/msgpump/v2/msgpeer)
+- [msgpump](https://godoc.org/github.com/someonegg/msgpump/v2)
 
 Installation
 ------------

@@ -1,4 +1,4 @@
-// Copyright 2019 someonegg. All rights reserved.
+// Copyright 2024 someonegg. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -11,12 +11,11 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/someonegg/msgpump"
+	"github.com/someonegg/msgpump/v2"
 )
 
 type entry struct {
 	ctx context.Context
-	t   string
 	m   msgpump.Message
 	w   ResponseWriter // not nil if request
 }
@@ -45,12 +44,12 @@ func ParallelHandler(h Handler, workerIdleTimeout time.Duration,
 	}
 }
 
-func (h *parallHandler) Process(ctx context.Context, t string, r Request, w ResponseWriter) {
-	h.parall(entry{ctx, t, r, w})
+func (h *parallHandler) Process(ctx context.Context, r Request, w ResponseWriter) {
+	h.parall(entry{ctx, r, w})
 }
 
-func (h *parallHandler) OnNotify(ctx context.Context, t string, n Notify) {
-	h.parall(entry{ctx, t, n, nil})
+func (h *parallHandler) OnNotify(ctx context.Context, n Notify) {
+	h.parall(entry{ctx, n, nil})
 }
 
 func (h *parallHandler) parall(e entry) {
@@ -98,8 +97,8 @@ func (h *parallHandler) work(e entry) {
 
 func (h *parallHandler) handle(e entry) {
 	if e.w != nil {
-		h.h.Process(e.ctx, e.t, e.m, e.w)
+		h.h.Process(e.ctx, e.m, e.w)
 	} else {
-		h.h.OnNotify(e.ctx, e.t, e.m)
+		h.h.OnNotify(e.ctx, e.m)
 	}
 }

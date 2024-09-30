@@ -1,4 +1,4 @@
-// Copyright 2019 someonegg. All rights reserved.
+// Copyright 2024 someonegg. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/someonegg/msgpump"
+	"github.com/someonegg/msgpump/v2"
 )
 
 type Request = msgpump.Message
@@ -27,9 +27,9 @@ type ResponseWriter func(ctx context.Context, resp Response) error
 //
 // See ParallelHandler too.
 type Handler interface {
-	Process(ctx context.Context, t string, r Request, w ResponseWriter)
+	Process(ctx context.Context, r Request, w ResponseWriter)
 	// notify message
-	OnNotify(ctx context.Context, t string, n Notify)
+	OnNotify(ctx context.Context, n Notify)
 }
 
 type Peer struct {
@@ -37,7 +37,7 @@ type Peer struct {
 	h Handler
 
 	locker sync.Mutex
-	nrid   uint32
+	nrid   uint64
 	resps  map[string]chan Response
 }
 
@@ -54,16 +54,16 @@ func NewPeer(rw msgpump.MessageReadWriter, h Handler, writeQueueSize int) *Peer 
 }
 
 // Do will send the request and wait for a response.
-func (p *Peer) Do(ctx context.Context, t string, r Request) (Response, error) {
+func (p *Peer) Do(ctx context.Context, r Request) (Response, error) {
 	respC := make(chan Response, 1)
 
 	p.locker.Lock()
-	rid := strconv.FormatUint(uint64(p.nrid), 16)
-	p.nrid += 1
+	p.nrid++
+	rid := strconv.FormatUint(p.nrid, 16)
 	p.resps[rid] = respC
-	added := true
 	p.locker.Unlock()
 
+	added := true
 	defer func() {
 		if added {
 			p.locker.Lock()
@@ -72,8 +72,7 @@ func (p *Peer) Do(ctx context.Context, t string, r Request) (Response, error) {
 		}
 	}()
 
-	mt := "R," + t + "," + rid
-	err := p.Pump.Post(ctx, mt, r)
+	err := p.Pump.OutputMP(ctx, msgpump.MPMessage{requestHeader(rid), r})
 	if err != nil {
 		return nil, err
 	}
@@ -90,42 +89,79 @@ func (p *Peer) Do(ctx context.Context, t string, r Request) (Response, error) {
 }
 
 // Notify will post the notify.
-func (p *Peer) Notify(ctx context.Context, t string, n Notify) error {
-	mt := "N," + t
-	return p.Pump.Post(ctx, mt, n)
+func (p *Peer) Notify(ctx context.Context, n Notify) error {
+	h := []byte("N\n")
+	return p.Pump.OutputMP(ctx, msgpump.MPMessage{h, n})
 }
 
 // Process implements the msgpump.Handler interface.
 //
-// The format of the message-type string t is:
+// The format of the message header is:
 //
-//	R,request-type,request-id  for request
-//	P,request-type,request-id  for response
-//	N,notify-type              for notify
-func (p *Peer) Process(ctx context.Context, mt string, msg msgpump.Message) {
-	ss := strings.SplitN(mt, ",", 4)
+//	R,request-id\n    for request
+//	P,request-id\n    for response
+//	N\n               for notify
+func (p *Peer) Process(ctx context.Context, m msgpump.Message) {
+	const MaxHeader = 128
+
+	var h []byte
+	var r []byte
+	for i := 0; i < len(m) && i < MaxHeader; i++ {
+		if m[i] == '\n' {
+			h = m[0:i]
+			r = m[i+1:]
+			break
+		}
+	}
+
+	if len(h) == 0 {
+		return
+	}
+	if len(h) == 1 && h[0] == 'N' {
+		p.h.OnNotify(ctx, r)
+		return
+	}
+
+	ss := strings.SplitN(string(h), ",", 3)
+
 	switch ss[0] {
 	case "R":
-		t, rid := ss[1], ss[2]
-		p.h.Process(ctx, t, msg,
+		rid := ss[1]
+		p.h.Process(ctx, r,
 			func(ctx context.Context, resp Response) error {
-				mt := "P," + t + "," + rid
-				return p.Pump.Post(ctx, mt, resp)
+				return p.Pump.OutputMP(ctx, msgpump.MPMessage{responseHeader(rid), resp})
 			})
 	case "P":
-		rid := ss[2]
+		rid := ss[1]
 		p.locker.Lock()
 		respC := p.resps[rid]
 		if respC != nil {
 			select {
-			case respC <- msg:
+			case respC <- r:
 			default:
 			}
 			delete(p.resps, rid)
 		}
 		p.locker.Unlock()
-	case "N":
-		t := ss[1]
-		p.h.OnNotify(ctx, t, msg)
 	}
+}
+
+func requestHeader(rid string) []byte {
+	l := len(rid) + 3
+	h := make([]byte, l)
+	h[0] = 'R'
+	h[1] = ','
+	copy(h[2:], rid)
+	h[l-1] = '\n'
+	return h
+}
+
+func responseHeader(rid string) []byte {
+	l := len(rid) + 3
+	h := make([]byte, l)
+	h[0] = 'P'
+	h[1] = ','
+	copy(h[2:], rid)
+	h[l-1] = '\n'
+	return h
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 someonegg. All rights reserved.
+// Copyright 2023 someonegg. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -30,18 +30,18 @@ type legalPanic struct {
 // You can process messages asynchronously if necessary, it is safe to read
 // them after returning.
 type Handler interface {
-	Process(ctx context.Context, t string, m Message)
+	Process(ctx context.Context, m Message)
 }
 
 // The HandlerFunc type is an adapter to allow the use of
 // ordinary functions as message handlers.  If f is a function
 // with the appropriate signature, HandlerFunc(f) is a
 // PumperHandler object that calls f.
-type HandlerFunc func(ctx context.Context, t string, m Message)
+type HandlerFunc func(ctx context.Context, m Message)
 
-// Process calls f(ctx, t, m).
-func (f HandlerFunc) Process(ctx context.Context, t string, m Message) {
-	f(ctx, t, m)
+// Process calls f(ctx, m).
+func (f HandlerFunc) Process(ctx context.Context, m Message) {
+	f(ctx, m)
 }
 
 type Statistics struct {
@@ -76,7 +76,7 @@ type Pump struct {
 	// write
 	werr error
 	wD   syncx.DoneChan
-	wQ   chan msgEntry
+	wQ   chan message
 
 	stat Statistics
 
@@ -98,7 +98,7 @@ func NewPump(rw MessageReadWriter, h Handler, writeQueueSize int) *Pump {
 
 		rD: syncx.NewDoneChan(),
 		wD: syncx.NewDoneChan(),
-		wQ: make(chan msgEntry, writeQueueSize),
+		wQ: make(chan message, writeQueueSize),
 
 		panicLogF: thePanicLogFunc,
 	}
@@ -194,9 +194,9 @@ func (p *Pump) reading(ctx context.Context) {
 	}()
 
 	for q := false; !q; {
-		t, m := p.readMessage()
+		m := p.readMessage()
 
-		p.h.Process(ctx, t, m)
+		p.h.Process(ctx, m)
 
 		select {
 		case <-ctx.Done():
@@ -206,19 +206,14 @@ func (p *Pump) reading(ctx context.Context) {
 	}
 }
 
-func (p *Pump) readMessage() (string, Message) {
-	t, m, err := p.rw.ReadMessage()
+func (p *Pump) readMessage() Message {
+	m, err := p.rw.ReadMessage()
 	if err != nil {
 		panic(legalPanic{err})
 	}
 	atomic.AddInt64(&p.stat.ReadedCount, 1)
-	atomic.AddInt64(&p.stat.ReadedBytes, int64(len(m)))
-	return t, m
-}
-
-type msgEntry struct {
-	t string
-	m Message
+	atomic.AddInt64(&p.stat.ReadedBytes, int64(m.Size()))
+	return m
 }
 
 func (p *Pump) writing(ctx context.Context) {
@@ -246,19 +241,24 @@ func (p *Pump) writing(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			q = true
-		case e := <-p.wQ:
-			p.writeMessage(e.t, e.m)
+		case m := <-p.wQ:
+			p.writeMessage(m)
 		}
 	}
 }
 
-func (p *Pump) writeMessage(t string, m Message) {
-	err := p.rw.WriteMessage(t, m)
+func (p *Pump) writeMessage(m message) {
+	var err error
+	if m.mS != nil {
+		err = p.rw.WriteMessage(m.mS)
+	} else {
+		err = p.rw.WriteMessageMP(m.mM)
+	}
 	if err != nil {
 		panic(legalPanic{err})
 	}
 	atomic.AddInt64(&p.stat.WrittenCount, 1)
-	atomic.AddInt64(&p.stat.WrittenBytes, int64(len(m)))
+	atomic.AddInt64(&p.stat.WrittenBytes, int64(m.Size()))
 }
 
 // Stop requests to stop the pump, the working loop will stop asynchronously.
@@ -287,14 +287,22 @@ func (p *Pump) Error() error {
 }
 
 // Output puts the message to the write queue.
-func (p *Pump) Output(t string, m Message) {
-	p.Post(context.Background(), t, m)
+func (p *Pump) Output(ctx context.Context, m Message) (err error) {
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+	case <-p.stopD:
+		err = ErrPumpStopped
+	case p.wQ <- message{mS: m}:
+		atomic.AddInt64(&p.stat.OutputCount, 1)
+	}
+	return
 }
 
 // TryOutput tries to put the message to the write queue.
-func (p *Pump) TryOutput(t string, m Message) bool {
+func (p *Pump) TryOutput(m Message) bool {
 	select {
-	case p.wQ <- msgEntry{t, m}:
+	case p.wQ <- message{mS: m}:
 		atomic.AddInt64(&p.stat.OutputCount, 1)
 		return true
 	default:
@@ -302,17 +310,28 @@ func (p *Pump) TryOutput(t string, m Message) bool {
 	}
 }
 
-// Post puts the message to the write queue.
-func (p *Pump) Post(ctx context.Context, t string, m Message) (err error) {
+// OutputMP puts the multipart message to the write queue.
+func (p *Pump) OutputMP(ctx context.Context, m MPMessage) (err error) {
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
 	case <-p.stopD:
 		err = ErrPumpStopped
-	case p.wQ <- msgEntry{t, m}:
+	case p.wQ <- message{mM: m}:
 		atomic.AddInt64(&p.stat.OutputCount, 1)
 	}
 	return
+}
+
+// TryOutputMP tries to put the multipart message to the write queue.
+func (p *Pump) TryOutputMP(m MPMessage) bool {
+	select {
+	case p.wQ <- message{mM: m}:
+		atomic.AddInt64(&p.stat.OutputCount, 1)
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *Pump) Statistics() Statistics {

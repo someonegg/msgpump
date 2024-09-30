@@ -1,4 +1,4 @@
-// Copyright 2017 someonegg. All rights reserved.
+// Copyright 2023 someonegg. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -12,10 +12,7 @@ import (
 	"net"
 )
 
-var (
-	errNetconnMessageLength = errors.New("netconn io: wrong message length")
-	errNetconnMessageFormat = errors.New("netconn io: wrong message format")
-)
+var errNetconnMessageLength = errors.New("netconn io: wrong message length")
 
 type netbufconn struct {
 	conn net.Conn
@@ -34,13 +31,13 @@ func (c *netbufconn) Close() error {
 }
 
 // NetconnMessageMaxLength is the maximum message length.
-var NetconnMessageMaxLength = 32 * 1024 * 1024
+var NetconnMessageMaxLength = 16 * 1024 * 1024
 
 // NetconnMRW converts a net.Conn to a MessageReadWriter.
 //
 // In the transport layer, message's layout is:
 //
-//	Length(4-bytes int, big-endian)Type=Message
+//	Length(4-bytes int, big-endian)Message
 func NetconnMRW(c net.Conn) MessageReadWriter {
 	return netconnMRW{c: getNetbufConn(c)}
 }
@@ -53,7 +50,7 @@ func (rw netconnMRW) OnStop() {
 	rw.c.Close()
 }
 
-func (rw netconnMRW) ReadMessage() (t string, m Message, Err error) {
+func (rw netconnMRW) ReadMessage() (m Message, Err error) {
 	var _l int32
 	err := binary.Read(rw.c, binary.BigEndian, &_l)
 	if err != nil {
@@ -74,30 +71,36 @@ func (rw netconnMRW) ReadMessage() (t string, m Message, Err error) {
 		return
 	}
 
-	for i := 0; i < len(p); i++ {
-		if p[i] == '=' {
-			t = string(p[0:i])
-			m = p[i+1:]
-			return
-		}
-	}
-
-	Err = errNetconnMessageFormat
+	m = p
 	return
 }
 
-func (rw netconnMRW) WriteMessage(t string, m Message) error {
-	l := len(t) + 1 + len(m)
+func (rw netconnMRW) WriteMessage(m Message) error {
+	l := m.Size()
 
 	err := binary.Write(rw.c, binary.BigEndian, int32(l))
 	if err != nil {
 		return err
 	}
 
-	rw.c.WriteString(t)
-	rw.c.WriteString("=")
-
 	_, err = rw.c.Write(m)
+	if err != nil {
+		return err
+	}
+
+	return rw.c.Flush()
+}
+
+func (rw netconnMRW) WriteMessageMP(m MPMessage) error {
+	l := m.Size()
+
+	err := binary.Write(rw.c, binary.BigEndian, int32(l))
+	if err != nil {
+		return err
+	}
+
+	bufs := net.Buffers(m)
+	_, err = bufs.WriteTo(rw.c)
 	if err != nil {
 		return err
 	}
