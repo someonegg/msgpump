@@ -23,4 +23,4 @@ Installation
 
 Install msgpump using the "go get" command:
 
-    go get github.com/someonegg/msgpump
+    go get github.com/someonegg/msgpump/v2
