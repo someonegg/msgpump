@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"testing"
 )
 
 type mockMRW struct {
@@ -82,4 +83,43 @@ func (rw *mockMRW) WriteMessageMP(m MPMessage) error {
 	bufs := net.Buffers(m)
 	bufs.WriteTo(&rw.b)
 	return nil
+}
+
+func TestMessage_Size(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  Message
+		want int
+	}{
+		{"empty", Message{}, 0},
+		{"normal", Message("hello"), 5},
+		{"binary", Message{0x00, 0xff, 0x01}, 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.msg.Size(); got != tt.want {
+				t.Errorf("Message.Size() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMPMessage_Size(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  MPMessage
+		want int
+	}{
+		{"empty", MPMessage{}, 0},
+		{"single", MPMessage{[]byte("hello")}, 5},
+		{"multiple", MPMessage{[]byte("hello"), []byte("world")}, 10},
+		{"with empty part", MPMessage{[]byte("a"), {}, []byte("b")}, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.msg.Size(); got != tt.want {
+				t.Errorf("MPMessage.Size() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
